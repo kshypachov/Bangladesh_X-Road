@@ -2,19 +2,19 @@
 
 set -e
 
-echo "[1/7] Создание системного пользователя aptly..."
+echo "[1/7] Creating system user aptly..."
 
-# Создать пользователя без возможности входа по паролю, без shell
+# Create a system user without login shell and password
 sudo useradd -r -m -d /home/aptly -s /usr/sbin/nologin aptly || true
 
-# Но разрешим root-переход в него
+# But allow root to switch to this user
 sudo usermod -s /bin/bash aptly
 
-# Настроим sudo-доступ (если требуется вручную)
-# sudo visudo: добавить строку вроде:
+# Configure sudo access (if needed manually)
+# sudo visudo: add a line like:
 # Defaults:root !requiretty
 
-echo "[2/7] Установка aptly и GnuPG..."
+echo "[2/7] Installing aptly and GnuPG..."
 
 sudo apt update
 sudo apt install -y gnupg2 curl nginx
@@ -24,13 +24,13 @@ echo "deb http://repo.aptly.info/ squeeze main" | sudo tee /etc/apt/sources.list
 sudo apt update
 sudo apt install -y aptly
 
-echo "[3/7] Настройка конфигурации aptly..."
+echo "[3/7] Configuring aptly..."
 
-# Настройка директории
+# Setup directory
 sudo mkdir -p /srv/aptly
 sudo chown aptly:aptly /srv/aptly
 
-# Создание конфигурационного файла от имени aptly
+# Create configuration file as aptly user
 sudo -u aptly bash -c 'cat > ~/.aptly.conf <<EOF
 {
   "rootDir": "/srv/aptly",
@@ -47,7 +47,7 @@ sudo -u aptly bash -c 'cat > ~/.aptly.conf <<EOF
 }
 EOF'
 
-echo "[4/7] Генерация GPG ключа..."
+echo "[4/7] Generating GPG key..."
 
 sudo -u aptly bash -c '
   set -e
@@ -83,7 +83,7 @@ EOF
   gpg --homedir "$HOME_DIR/.gnupg" --output /srv/aptly/public/aptly.gpg --armor --export "$KEY_ID"
 '
 
-echo "[5/7] Настройка nginx..."
+echo "[5/7] Configuring nginx..."
 
 sudo tee /etc/nginx/sites-available/aptly >/dev/null <<EOF
 server {
@@ -103,20 +103,20 @@ sudo rm /etc/nginx/sites-enabled/default
 sudo ln -sf /etc/nginx/sites-available/aptly /etc/nginx/sites-enabled/aptly
 sudo nginx -t && sudo systemctl reload nginx
 
-echo "[6/7] Права доступа..."
+echo "[6/7] Setting permissions..."
 
-# nginx должен иметь доступ только на чтение к /srv/aptly/public
+# nginx should have read-only access to /srv/aptly/public
 sudo chmod o+rx /srv/aptly/public
 sudo find /srv/aptly/public -type d -exec chmod o+rx {} +
 sudo find /srv/aptly/public -type f -exec chmod o+r {} +
 
-echo "[7/7] Готово!"
+echo "[7/7] Done!"
 
-echo "Теперь вы можете:"
+echo "You can now:"
 echo "  sudo su - aptly"
 echo "  aptly repo create myrepo"
 echo "  aptly repo add myrepo /path/to/debs"
 echo "  aptly publish repo -architectures=amd64 myrepo"
 echo
-echo "Репозиторий доступен по адресу: http://<IP-адрес>/"
-echo "Публичный ключ для клиента: http://<IP-адрес>/aptly.gpg"
+echo "Repository is available at: http://<IP-address>/"
+echo "Public key for client: http://<IP-address>/aptly.gpg"

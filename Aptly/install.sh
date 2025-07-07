@@ -2,27 +2,27 @@
 
 set -e
 
-# === 1. Установка aptly ===
-echo "[1/5] Установка aptly..."
+# === 1. Installing aptly ===
+echo "[1/5] Installing aptly..."
 sudo apt update
 sudo apt install -y gnupg curl
 
-# Добавим репозиторий aptly
+# Add aptly repository
 curl -fsSL https://www.aptly.info/pubkey.txt | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/aptly.gpg
 echo "deb http://repo.aptly.info/ squeeze main" | sudo tee /etc/apt/sources.list.d/aptly.list
 
 sudo apt update
 sudo apt install -y aptly
 
-# === 2. Генерация GPG ключа (если его нет) ===
-echo "[2/5] Проверка GPG ключа..."
+# === 2. Generate GPG key (if not present) ===
+echo "[2/5] Checking GPG key..."
 
 GPG_EMAIL="repo@example.com"
 GPG_NAME="APT Repo Signing Key"
 GPG_KEY_ID=$(gpg --list-keys --with-colons "$GPG_EMAIL" 2>/dev/null | awk -F: '/^pub/ { print $5 }')
 
 if [ -z "$GPG_KEY_ID" ]; then
-  echo "[!] Ключ не найден, создаём..."
+  echo "[!] Key not found, generating..."
   cat > gpg_batch <<EOF
     %no-protection
     Key-Type: RSA
@@ -39,10 +39,10 @@ EOF
   GPG_KEY_ID=$(gpg --list-keys --with-colons "$GPG_EMAIL" | awk -F: '/^pub/ { print $5 }')
 fi
 
-echo "[✓] Используем GPG ключ: $GPG_KEY_ID"
+echo "[✓] Using GPG key: $GPG_KEY_ID"
 
-# === 3. Настройка aptly.conf ===
-echo "[3/5] Настройка ~/.aptly.conf..."
+# === 3. Configure aptly.conf ===
+echo "[3/5] Configuring ~/.aptly.conf..."
 
 cat > ~/.aptly.conf <<EOF
 {
@@ -60,14 +60,14 @@ cat > ~/.aptly.conf <<EOF
 }
 EOF
 
-# === 4. Подготовка директорий ===
-echo "[4/5] Создание директорий..."
+# === 4. Prepare directories ===
+echo "[4/5] Creating directories..."
 mkdir -p ~/.aptly/public
 
-# === 5. Вывод финальной информации ===
-echo "[5/5] Готово."
-echo "Aptly установлен и настроен. GPG-ключ: $GPG_KEY_ID"
-echo "Для публикации используйте команды вроде:"
+# === 5. Final output ===
+echo "[5/5] Done."
+echo "Aptly has been installed and configured. GPG key: $GPG_KEY_ID"
+echo "To publish a repository, use commands like:"
 echo "  aptly repo create myrepo"
 echo "  aptly repo add myrepo ./path/to/packages"
 echo "  aptly publish repo -architectures=amd64 myrepo"

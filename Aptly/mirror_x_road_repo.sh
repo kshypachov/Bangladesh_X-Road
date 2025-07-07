@@ -3,25 +3,24 @@
 set -e
 
 if [ "$(whoami)" != "aptly" ]; then
-  echo "ERROR: Этот скрипт должен запускаться от имени пользователя 'aptly'."
-  echo "Используй: sudo su - aptly"
+  echo "ERROR: This script must be run as the 'aptly' user."
+  echo "Use: sudo su - aptly"
   exit 1
 fi
 
-echo "[1/6] Инициализация keyring..."
+echo "[1/6] Initializing keyring..."
 
 mkdir -p ~/.aptly
 touch ~/.aptly/trustedkeys.gpg
 chmod 600 ~/.aptly/trustedkeys.gpg
 
-echo "[2/6] Импорт ключа из niis.org..."
+echo "[2/6] Importing key from niis.org..."
 wget -O - https://artifactory.niis.org/api/gpg/key/public | gpg --no-default-keyring --keyring ~/.aptly/trustedkeys.gpg --import
 
-echo "[3/6] Импорт с keyserver (резерв)..."
+echo "[3/6] Importing from keyserver (fallback)..."
 gpg --no-default-keyring --keyring trustedkeys.gpg --keyserver keyserver.ubuntu.com --recv-keys FB0D532C10F6EC5B
 
-
-echo "[4/6] Создание зеркала..."
+echo "[4/6] Creating mirror..."
 aptly mirror create \
   -architectures="amd64" \
   xroad-remote \
@@ -29,9 +28,9 @@ aptly mirror create \
   jammy-current \
   main
 
-echo "[5/6] Обновление зеркала..."
+echo "[5/6] Updating mirror..."
 aptly mirror update xroad-remote
 
-echo "[6/6] Создание снапшота и публикация..."
+echo "[6/6] Creating snapshot and publishing..."
 aptly snapshot create xroad-snap from mirror xroad-remote
 aptly publish snapshot -architectures=amd64 xroad-snap
