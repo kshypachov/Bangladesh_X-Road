@@ -1,0 +1,122 @@
+#!/bin/bash
+
+set -e
+
+echo "[1/7] Создание системного пользователя aptly..."
+
+# Создать пользователя без возможности входа по паролю, без shell
+sudo useradd -r -m -d /home/aptly -s /usr/sbin/nologin aptly || true
+
+# Но разрешим root-переход в него
+sudo usermod -s /bin/bash aptly
+
+# Настроим sudo-доступ (если требуется вручную)
+# sudo visudo: добавить строку вроде:
+# Defaults:root !requiretty
+
+echo "[2/7] Установка aptly и GnuPG..."
+
+sudo apt update
+sudo apt install -y gnupg2 curl nginx
+
+curl -fsSL https://www.aptly.info/pubkey.txt | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/aptly.gpg
+echo "deb http://repo.aptly.info/ squeeze main" | sudo tee /etc/apt/sources.list.d/aptly.list
+sudo apt update
+sudo apt install -y aptly
+
+echo "[3/7] Настройка конфигурации aptly..."
+
+# Настройка директории
+sudo mkdir -p /srv/aptly
+sudo chown aptly:aptly /srv/aptly
+
+# Создание конфигурационного файла от имени aptly
+sudo -u aptly bash -c 'cat > ~/.aptly.conf <<EOF
+{
+  "rootDir": "/srv/aptly",
+  "downloadConcurrency": 4,
+  "architectures": ["amd64"],
+  "dependencyFollowSuggests": false,
+  "dependencyFollowRecommends": false,
+  "dependencyFollowAllVariants": false,
+  "dependencyFollowSource": false,
+  "gpgDisableSign": false,
+  "gpgDisableVerify": false,
+  "gpgProvider": "gpg",
+  "gpgKey": ""
+}
+EOF'
+
+echo "[4/7] Генерация GPG ключа..."
+
+sudo -u aptly bash -c '
+  set -e
+  GPG_EMAIL="repo@example.com"
+  GPG_NAME="APT Repo Signing Key"
+  HOME_DIR="/home/aptly"
+  BATCH_FILE="$HOME_DIR/gpg_batch"
+
+  KEY_ID=$(gpg --homedir "$HOME_DIR/.gnupg" --list-keys --with-colons "$GPG_EMAIL" 2>/dev/null | awk -F: "/^pub/ {print \$5}")
+
+  if [ -z "$KEY_ID" ]; then
+    cat <<EOF > "$BATCH_FILE"
+%no-protection
+Key-Type: RSA
+Key-Length: 2048
+Subkey-Type: RSA
+Subkey-Length: 2048
+Name-Real: $GPG_NAME
+Name-Email: $GPG_EMAIL
+Expire-Date: 1y
+%commit
+EOF
+
+    gpg --homedir "$HOME_DIR/.gnupg" --batch --gen-key "$BATCH_FILE"
+    rm -f "$BATCH_FILE"
+  fi
+
+  KEY_ID=$(gpg --homedir "$HOME_DIR/.gnupg" --list-keys --with-colons "$GPG_EMAIL" | awk -F: "/^pub/ {print \$5}")
+
+  sed -i "s|\"gpgKey\": \"\"|\"gpgKey\": \"$KEY_ID\"|" "$HOME_DIR/.aptly.conf"
+
+  mkdir -p /srv/aptly/public
+  gpg --homedir "$HOME_DIR/.gnupg" --output /srv/aptly/public/aptly.gpg --armor --export "$KEY_ID"
+'
+
+echo "[5/7] Настройка nginx..."
+
+sudo tee /etc/nginx/sites-available/aptly >/dev/null <<EOF
+server {
+    listen 80;
+    server_name _;
+
+    root /srv/aptly/public;
+    index index.html;
+
+    location / {
+        autoindex on;
+    }
+}
+EOF
+
+sudo rm /etc/nginx/sites-enabled/default
+sudo ln -sf /etc/nginx/sites-available/aptly /etc/nginx/sites-enabled/aptly
+sudo nginx -t && sudo systemctl reload nginx
+
+echo "[6/7] Права доступа..."
+
+# nginx должен иметь доступ только на чтение к /srv/aptly/public
+sudo chmod o+rx /srv/aptly/public
+sudo find /srv/aptly/public -type d -exec chmod o+rx {} +
+sudo find /srv/aptly/public -type f -exec chmod o+r {} +
+
+echo "[7/7] Готово!"
+
+echo "Теперь вы можете:"
+echo "  sudo su - aptly"
+echo "  aptly repo create myrepo"
+echo "  aptly repo add myrepo /path/to/debs"
+echo "  aptly publish repo -architectures=amd64 myrepo"
+echo
+echo "Репозиторий доступен по адресу: http://<IP-адрес>/"
+echo "Публичный ключ для клиента: http://<IP-адрес>/aptly.gpg"
