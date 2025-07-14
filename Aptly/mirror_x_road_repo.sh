@@ -25,7 +25,7 @@ aptly mirror create \
   -architectures="amd64" \
   xroad-remote \
   https://artifactory.niis.org/xroad-release-deb \
-  jammy-current \
+  noble-current \
   main
 
 echo "[5/6] Updating mirror..."
