@@ -118,5 +118,13 @@ echo "  aptly repo create myrepo"
 echo "  aptly repo add myrepo /path/to/debs"
 echo "  aptly publish repo -architectures=amd64 myrepo"
 echo
+echo
+echo
 echo "Repository is available at: http://<IP-address>/"
 echo "Public key for client: http://<IP-address>/aptly.gpg"
+echo "To add key to ubuntu 24.04+ use:"
+echo "  sudo mkdir -p /etc/apt/keyrings"
+echo "  curl -fsSL http://<Repo server IP>/aptly.gpg | sudo gpg --dearmor -o /etc/apt/keyrings/aptly.gpg"
+echo
+echo
+echo
